@@ -3,9 +3,11 @@
 namespace App\Serializer\Denormalizer;
 
 use App\DTO\SerializerTestDTO;
-use Symfony\Component\PropertyInfo\Extractor\SerializerExtractor;
+use Doctrine\Common\Annotations\AnnotationReader;
+use Doctrine\Common\Annotations\Reader;
 use Symfony\Component\PropertyInfo\PropertyInfoExtractorInterface;
 use Symfony\Component\PropertyInfo\Type;
+use Symfony\Component\Serializer\Annotation\SerializedName;
 use Symfony\Component\Serializer\Exception\BadMethodCallException;
 use Symfony\Component\Serializer\Exception\ExceptionInterface;
 use Symfony\Component\Serializer\Exception\ExtraAttributesException;
@@ -19,13 +21,17 @@ class DTODenormalizer implements DenormalizerInterface
 {
     private $propertyInfoExtractor;
 
+    private $annotationReader;
+
     /**
      * DTODenormalizer constructor.
      * @param PropertyInfoExtractorInterface $propertyInfo
+     * @param Reader $annotationReader
      */
-    public function __construct(PropertyInfoExtractorInterface $propertyInfo)
+    public function __construct(PropertyInfoExtractorInterface $propertyInfo, Reader $annotationReader)
     {
         $this->propertyInfoExtractor = $propertyInfo;
+        $this->annotationReader = $annotationReader;
     }
 
     /**
@@ -45,19 +51,32 @@ class DTODenormalizer implements DenormalizerInterface
      * @throws LogicException           Occurs when the normalizer is not supposed to denormalize
      * @throws RuntimeException         Occurs if the class cannot be instantiated
      * @throws ExceptionInterface       Occurs for all the other cases of errors
+     * @throws \ReflectionException
      */
     public function denormalize($data, $class, $format = null, array $context = [])
     {
         $object = new SerializerTestDTO;
+        $reflectionClass = new \ReflectionClass(SerializerTestDTO::class);
 
         $objectProperties = $this->propertyInfoExtractor->getProperties(SerializerTestDTO::class);
-        $dataKeys = array_keys($data);
+        foreach ($objectProperties as $property) {
+            $reflectionProperty = $reflectionClass->getProperty($property);
+            $serializedName = $this->annotationReader->getPropertyAnnotation($reflectionProperty, SerializedName::class);
 
-        $objectPropertiesToSet = array_intersect($objectProperties, $dataKeys);
-
-        foreach ($objectPropertiesToSet as $property) {
             $propertyInfo = $this->propertyInfoExtractor->getTypes(SerializerTestDTO::class, $property);
-            $object->$property = $this->castValue($propertyInfo, $data[$property]);
+
+            $dataKey = $property;
+            if ($serializedName) {
+                $dataKey = $serializedName->getSerializedName();
+            }
+
+            if (array_key_exists($dataKey, $data)) {
+                if (!$reflectionProperty->isPublic()) {
+                    $reflectionProperty->setAccessible(true);
+                }
+
+                $reflectionProperty->setValue($object, $this->castValue($propertyInfo, $data[$dataKey]));
+            }
         }
 
         return $object;

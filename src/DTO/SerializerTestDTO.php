@@ -2,10 +2,13 @@
 
 namespace App\DTO;
 
+use Symfony\Component\Serializer\Annotation\SerializedName;
+
 class SerializerTestDTO
 {
     /**
      * @var int
+     * @SerializedName("unique-id")
      */
     public $id;
 

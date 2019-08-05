@@ -21,7 +21,7 @@ class TestCommand extends Command
      */
     private $badFormattedJSON = <<<EOF
 {
-    "id": "123",
+    "unique-id": "123",
     "float": "123.12",
     "key": "value",
     "nonExistent": "infinity"
